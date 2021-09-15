@@ -87,6 +87,7 @@ export function reactive(target: object) {
   if (target && (target as Target)[ReactiveFlags.IS_READONLY]) {
     return target
   }
+
   return createReactiveObject(
     target,
     false,

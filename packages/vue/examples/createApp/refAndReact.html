@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        body {
+            text-align: center;
+        }
+    </style>
+    <script src="../../dist/vue.global.js"></script>
+</head>
+
+<body>
+    <div id="app" style="text-align: left;">
+        title:{{book.children.child1}}
+        <div>
+            <button @click="handleClick">更新标题</button>
+        </div>
+    </div>
+    <script>
+        'use strict'
+        const app = Vue.createApp({
+            setup() {
+
+                const { ref, reactive, toRefs } = Vue
+                const count = ref(0)
+                console.log(Object.getOwnPropertyDescriptors(count))
+
+                const book = reactive({
+                    author: 'Vue Team',
+                    year: '2020',
+                    title: 'Vue 3 Guide',
+                    description: 'You are reading this book right now ;)',
+                    children: {
+                        child1: '你好'
+                    },
+                    price: 'free'
+                })
+
+                console.log('book', book)
+                let { children } = toRefs(book)
+                function handleClick(e) {
+
+                    children.value.child1 = 'Vue 3 Detailed Guide' + count.value // 我们需要使用 .value 作为标题，现在是 ref
+                    count.value++
+                }
+
+                return {
+                    book,
+                    handleClick
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+
+</html>
