@@ -6,7 +6,9 @@ import {
   NodeTypes,
   CompilerOptions,
   InterpolationNode,
-  ConstantTypes
+  ConstantTypes,
+  BindingTypes,
+  baseCompile
 } from '../../src'
 import { transformIf } from '../../src/transforms/vIf'
 import { transformExpression } from '../../src/transforms/transformExpression'
@@ -400,6 +402,33 @@ describe('compiler: expression transform', () => {
     )
   })
 
+  test('should prefix in assignment', () => {
+    const node = parseWithExpressionTransform(
+      `{{ x = 1 }}`
+    ) as InterpolationNode
+    expect(node.content).toMatchObject({
+      type: NodeTypes.COMPOUND_EXPRESSION,
+      children: [{ content: `_ctx.x` }, ` = 1`]
+    })
+  })
+
+  test('should prefix in assignment pattern', () => {
+    const node = parseWithExpressionTransform(
+      `{{ { x, y: [z] } = obj }}`
+    ) as InterpolationNode
+    expect(node.content).toMatchObject({
+      type: NodeTypes.COMPOUND_EXPRESSION,
+      children: [
+        `{ x: `,
+        { content: `_ctx.x` },
+        `, y: [`,
+        { content: `_ctx.z` },
+        `] } = `,
+        { content: `_ctx.obj` }
+      ]
+    })
+  })
+
   describe('ES Proposals support', () => {
     test('bigInt', () => {
       const node = parseWithExpressionTransform(
@@ -455,6 +484,52 @@ describe('compiler: expression transform', () => {
         type: NodeTypes.COMPOUND_EXPRESSION,
         children: [{ content: `_ctx.a` }, ` |> `, { content: `_ctx.uppercase` }]
       })
+    })
+  })
+
+  describe('bindingMetadata', () => {
+    const bindingMetadata = {
+      props: BindingTypes.PROPS,
+      setup: BindingTypes.SETUP_MAYBE_REF,
+      setupConst: BindingTypes.SETUP_CONST,
+      data: BindingTypes.DATA,
+      options: BindingTypes.OPTIONS
+    }
+
+    function compileWithBindingMetadata(
+      template: string,
+      options?: CompilerOptions
+    ) {
+      return baseCompile(template, {
+        prefixIdentifiers: true,
+        bindingMetadata,
+        ...options
+      })
+    }
+
+    test('non-inline mode', () => {
+      const { code } = compileWithBindingMetadata(
+        `<div>{{ props }} {{ setup }} {{ data }} {{ options }}</div>`
+      )
+      expect(code).toMatch(`$props.props`)
+      expect(code).toMatch(`$setup.setup`)
+      expect(code).toMatch(`$data.data`)
+      expect(code).toMatch(`$options.options`)
+      expect(code).toMatch(`_ctx, _cache, $props, $setup, $data, $options`)
+      expect(code).toMatchSnapshot()
+    })
+
+    test('inline mode', () => {
+      const { code } = compileWithBindingMetadata(
+        `<div>{{ props }} {{ setup }} {{ setupConst }} {{ data }} {{ options }}</div>`,
+        { inline: true }
+      )
+      expect(code).toMatch(`__props.props`)
+      expect(code).toMatch(`_unref(setup)`)
+      expect(code).toMatch(`_toDisplayString(setupConst)`)
+      expect(code).toMatch(`_ctx.data`)
+      expect(code).toMatch(`_ctx.options`)
+      expect(code).toMatchSnapshot()
     })
   })
 })

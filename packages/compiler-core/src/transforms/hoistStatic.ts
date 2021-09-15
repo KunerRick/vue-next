@@ -9,17 +9,26 @@ import {
   ComponentNode,
   TemplateNode,
   VNodeCall,
-  ParentNode
+  ParentNode,
+  JSChildNode,
+  CallExpression,
+  createArrayExpression
 } from '../ast'
 import { TransformContext } from '../transform'
-import { PatchFlags, isString, isSymbol } from '@vue/shared'
-import { isSlotOutlet } from '../utils'
+import { PatchFlags, isString, isSymbol, isArray } from '@vue/shared'
+import { getVNodeBlockHelper, getVNodeHelper, isSlotOutlet } from '../utils'
+import {
+  OPEN_BLOCK,
+  GUARD_REACTIVE_PROPS,
+  NORMALIZE_CLASS,
+  NORMALIZE_PROPS,
+  NORMALIZE_STYLE
+} from '../runtimeHelpers'
 
 export function hoistStatic(root: RootNode, context: TransformContext) {
   walk(
     root,
     context,
-    new Map(),
     // Root node is unfortunately non-hoistable due to potential parent
     // fallthrough attributes.
     isSingleElementRoot(root, root.children[0])
@@ -41,10 +50,8 @@ export function isSingleElementRoot(
 function walk(
   node: ParentNode,
   context: TransformContext,
-  resultCache: Map<TemplateChildNode, ConstantTypes>,
   doNotHoistNode: boolean = false
 ) {
-  let hasHoistedNode = false
   // Some transforms, e.g. transformAssetUrls from @vue/compiler-sfc, replaces
   // static bindings with expressions. These expressions are guaranteed to be
   // constant so they are still eligible for hoisting, but they are only
@@ -56,6 +63,9 @@ function walk(
   let canStringify = true
 
   const { children } = node
+  const originalCount = children.length
+  let hoistedCount = 0
+
   for (let i = 0; i < children.length; i++) {
     const child = children[i]
     // only plain elements & text calls are eligible for hoisting.
@@ -65,7 +75,7 @@ function walk(
     ) {
       const constantType = doNotHoistNode
         ? ConstantTypes.NOT_CONSTANT
-        : getConstantType(child, resultCache)
+        : getConstantType(child, context)
       if (constantType > ConstantTypes.NOT_CONSTANT) {
         if (constantType < ConstantTypes.CAN_STRINGIFY) {
           canStringify = false
@@ -74,7 +84,7 @@ function walk(
           ;(child.codegenNode as VNodeCall).patchFlag =
             PatchFlags.HOISTED + (__DEV__ ? ` /* HOISTED */` : ``)
           child.codegenNode = context.hoist(child.codegenNode!)
-          hasHoistedNode = true
+          hoistedCount++
           continue
         }
       } else {
@@ -87,7 +97,7 @@ function walk(
             (!flag ||
               flag === PatchFlags.NEED_PATCH ||
               flag === PatchFlags.TEXT) &&
-            getGeneratedPropsConstantType(child, resultCache) >=
+            getGeneratedPropsConstantType(child, context) >=
               ConstantTypes.CAN_HOIST
           ) {
             const props = getNodeProps(child)
@@ -95,55 +105,80 @@ function walk(
               codegenNode.props = context.hoist(props)
             }
           }
+          if (codegenNode.dynamicProps) {
+            codegenNode.dynamicProps = context.hoist(codegenNode.dynamicProps)
+          }
         }
       }
     } else if (child.type === NodeTypes.TEXT_CALL) {
-      const contentType = getConstantType(child.content, resultCache)
+      const contentType = getConstantType(child.content, context)
       if (contentType > 0) {
         if (contentType < ConstantTypes.CAN_STRINGIFY) {
           canStringify = false
         }
         if (contentType >= ConstantTypes.CAN_HOIST) {
           child.codegenNode = context.hoist(child.codegenNode)
-          hasHoistedNode = true
+          hoistedCount++
         }
       }
     }
 
     // walk further
     if (child.type === NodeTypes.ELEMENT) {
-      walk(child, context, resultCache)
+      const isComponent = child.tagType === ElementTypes.COMPONENT
+      if (isComponent) {
+        context.scopes.vSlot++
+      }
+      walk(child, context)
+      if (isComponent) {
+        context.scopes.vSlot--
+      }
     } else if (child.type === NodeTypes.FOR) {
       // Do not hoist v-for single child because it has to be a block
-      walk(child, context, resultCache, child.children.length === 1)
+      walk(child, context, child.children.length === 1)
     } else if (child.type === NodeTypes.IF) {
       for (let i = 0; i < child.branches.length; i++) {
         // Do not hoist v-if single child because it has to be a block
         walk(
           child.branches[i],
           context,
-          resultCache,
           child.branches[i].children.length === 1
         )
       }
     }
   }
 
-  if (canStringify && hasHoistedNode && context.transformHoist) {
+  if (canStringify && hoistedCount && context.transformHoist) {
     context.transformHoist(children, context, node)
+  }
+
+  // all children were hoisted - the entire children array is hoistable.
+  if (
+    hoistedCount &&
+    hoistedCount === originalCount &&
+    node.type === NodeTypes.ELEMENT &&
+    node.tagType === ElementTypes.ELEMENT &&
+    node.codegenNode &&
+    node.codegenNode.type === NodeTypes.VNODE_CALL &&
+    isArray(node.codegenNode.children)
+  ) {
+    node.codegenNode.children = context.hoist(
+      createArrayExpression(node.codegenNode.children)
+    )
   }
 }
 
 export function getConstantType(
   node: TemplateChildNode | SimpleExpressionNode,
-  resultCache: Map<TemplateChildNode, ConstantTypes> = new Map()
+  context: TransformContext
 ): ConstantTypes {
+  const { constantCache } = context
   switch (node.type) {
     case NodeTypes.ELEMENT:
       if (node.tagType !== ElementTypes.ELEMENT) {
         return ConstantTypes.NOT_CONSTANT
       }
-      const cached = resultCache.get(node)
+      const cached = constantCache.get(node)
       if (cached !== undefined) {
         return cached
       }
@@ -161,12 +196,9 @@ export function getConstantType(
         // non-hoistable expressions that refers to scope variables, e.g. compiler
         // injected keys or cached event handlers. Therefore we need to always
         // check the codegenNode's props to be sure.
-        const generatedPropsType = getGeneratedPropsConstantType(
-          node,
-          resultCache
-        )
+        const generatedPropsType = getGeneratedPropsConstantType(node, context)
         if (generatedPropsType === ConstantTypes.NOT_CONSTANT) {
-          resultCache.set(node, ConstantTypes.NOT_CONSTANT)
+          constantCache.set(node, ConstantTypes.NOT_CONSTANT)
           return ConstantTypes.NOT_CONSTANT
         }
         if (generatedPropsType < returnType) {
@@ -175,9 +207,9 @@ export function getConstantType(
 
         // 2. its children.
         for (let i = 0; i < node.children.length; i++) {
-          const childType = getConstantType(node.children[i], resultCache)
+          const childType = getConstantType(node.children[i], context)
           if (childType === ConstantTypes.NOT_CONSTANT) {
-            resultCache.set(node, ConstantTypes.NOT_CONSTANT)
+            constantCache.set(node, ConstantTypes.NOT_CONSTANT)
             return ConstantTypes.NOT_CONSTANT
           }
           if (childType < returnType) {
@@ -193,9 +225,9 @@ export function getConstantType(
           for (let i = 0; i < node.props.length; i++) {
             const p = node.props[i]
             if (p.type === NodeTypes.DIRECTIVE && p.name === 'bind' && p.exp) {
-              const expType = getConstantType(p.exp, resultCache)
+              const expType = getConstantType(p.exp, context)
               if (expType === ConstantTypes.NOT_CONSTANT) {
-                resultCache.set(node, ConstantTypes.NOT_CONSTANT)
+                constantCache.set(node, ConstantTypes.NOT_CONSTANT)
                 return ConstantTypes.NOT_CONSTANT
               }
               if (expType < returnType) {
@@ -209,13 +241,18 @@ export function getConstantType(
         // static then they don't need to be blocks since there will be no
         // nested updates.
         if (codegenNode.isBlock) {
+          context.removeHelper(OPEN_BLOCK)
+          context.removeHelper(
+            getVNodeBlockHelper(context.inSSR, codegenNode.isComponent)
+          )
           codegenNode.isBlock = false
+          context.helper(getVNodeHelper(context.inSSR, codegenNode.isComponent))
         }
 
-        resultCache.set(node, returnType)
+        constantCache.set(node, returnType)
         return returnType
       } else {
-        resultCache.set(node, ConstantTypes.NOT_CONSTANT)
+        constantCache.set(node, ConstantTypes.NOT_CONSTANT)
         return ConstantTypes.NOT_CONSTANT
       }
     case NodeTypes.TEXT:
@@ -227,7 +264,7 @@ export function getConstantType(
       return ConstantTypes.NOT_CONSTANT
     case NodeTypes.INTERPOLATION:
     case NodeTypes.TEXT_CALL:
-      return getConstantType(node.content, resultCache)
+      return getConstantType(node.content, context)
     case NodeTypes.SIMPLE_EXPRESSION:
       return node.constType
     case NodeTypes.COMPOUND_EXPRESSION:
@@ -237,7 +274,7 @@ export function getConstantType(
         if (isString(child) || isSymbol(child)) {
           continue
         }
-        const childType = getConstantType(child, resultCache)
+        const childType = getConstantType(child, context)
         if (childType === ConstantTypes.NOT_CONSTANT) {
           return ConstantTypes.NOT_CONSTANT
         } else if (childType < returnType) {
@@ -254,9 +291,36 @@ export function getConstantType(
   }
 }
 
+const allowHoistedHelperSet = new Set([
+  NORMALIZE_CLASS,
+  NORMALIZE_STYLE,
+  NORMALIZE_PROPS,
+  GUARD_REACTIVE_PROPS
+])
+
+function getConstantTypeOfHelperCall(
+  value: CallExpression,
+  context: TransformContext
+): ConstantTypes {
+  if (
+    value.type === NodeTypes.JS_CALL_EXPRESSION &&
+    !isString(value.callee) &&
+    allowHoistedHelperSet.has(value.callee)
+  ) {
+    const arg = value.arguments[0] as JSChildNode
+    if (arg.type === NodeTypes.SIMPLE_EXPRESSION) {
+      return getConstantType(arg, context)
+    } else if (arg.type === NodeTypes.JS_CALL_EXPRESSION) {
+      // in the case of nested helper call, e.g. `normalizeProps(guardReactiveProps(exp))`
+      return getConstantTypeOfHelperCall(arg, context)
+    }
+  }
+  return ConstantTypes.NOT_CONSTANT
+}
+
 function getGeneratedPropsConstantType(
   node: PlainElementNode,
-  resultCache: Map<TemplateChildNode, ConstantTypes>
+  context: TransformContext
 ): ConstantTypes {
   let returnType = ConstantTypes.CAN_STRINGIFY
   const props = getNodeProps(node)
@@ -264,17 +328,24 @@ function getGeneratedPropsConstantType(
     const { properties } = props
     for (let i = 0; i < properties.length; i++) {
       const { key, value } = properties[i]
-      const keyType = getConstantType(key, resultCache)
+      const keyType = getConstantType(key, context)
       if (keyType === ConstantTypes.NOT_CONSTANT) {
         return keyType
       }
       if (keyType < returnType) {
         returnType = keyType
       }
-      if (value.type !== NodeTypes.SIMPLE_EXPRESSION) {
-        return ConstantTypes.NOT_CONSTANT
+      let valueType: ConstantTypes
+      if (value.type === NodeTypes.SIMPLE_EXPRESSION) {
+        valueType = getConstantType(value, context)
+      } else if (value.type === NodeTypes.JS_CALL_EXPRESSION) {
+        // some helper calls can be hoisted,
+        // such as the `normalizeProps` generated by the compiler for pre-normalize class,
+        // in this case we need to respect the ConstanType of the helper's argments
+        valueType = getConstantTypeOfHelperCall(value, context)
+      } else {
+        valueType = ConstantTypes.NOT_CONSTANT
       }
-      const valueType = getConstantType(value, resultCache)
       if (valueType === ConstantTypes.NOT_CONSTANT) {
         return valueType
       }

@@ -50,17 +50,33 @@ async function run() {
 }
 
 async function buildAll(targets) {
-  for (const target of targets) {
-    await build(target)
+  await runParallel(require('os').cpus().length, targets, build)
+}
+
+async function runParallel(maxConcurrency, source, iteratorFn) {
+  const ret = []
+  const executing = []
+  for (const item of source) {
+    const p = Promise.resolve().then(() => iteratorFn(item, source))
+    ret.push(p)
+
+    if (maxConcurrency <= source.length) {
+      const e = p.then(() => executing.splice(executing.indexOf(e), 1))
+      executing.push(e)
+      if (executing.length >= maxConcurrency) {
+        await Promise.race(executing)
+      }
+    }
   }
+  return Promise.all(ret)
 }
 
 async function build(target) {
   const pkgDir = path.resolve(`packages/${target}`)
   const pkg = require(`${pkgDir}/package.json`)
 
-  // only build published packages for release
-  if (isRelease && pkg.private) {
+  // if this is a full build (no specific targets), ignore private packages
+  if ((isRelease || !targets.length) && pkg.private) {
     return
   }
 
@@ -102,9 +118,8 @@ async function build(target) {
     const { Extractor, ExtractorConfig } = require('@microsoft/api-extractor')
 
     const extractorConfigPath = path.resolve(pkgDir, `api-extractor.json`)
-    const extractorConfig = ExtractorConfig.loadFileAndPrepare(
-      extractorConfigPath
-    )
+    const extractorConfig =
+      ExtractorConfig.loadFileAndPrepare(extractorConfigPath)
     const extractorResult = Extractor.invoke(extractorConfig, {
       localBuild: true,
       showVerboseMessages: true
@@ -153,6 +168,7 @@ function checkAllSizes(targets) {
 function checkSize(target) {
   const pkgDir = path.resolve(`packages/${target}`)
   checkFileSize(`${pkgDir}/dist/${target}.global.prod.js`)
+  checkFileSize(`${pkgDir}/dist/${target}.runtime.global.prod.js`)
 }
 
 function checkFileSize(filePath) {
