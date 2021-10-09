@@ -203,6 +203,7 @@ export function track(target: object, type: TrackOpTypes, key: unknown) {
     : undefined
 
   trackEffects(dep, eventInfo)
+  console.log(key, dep, target)
 }
 
 export function isTracking() {

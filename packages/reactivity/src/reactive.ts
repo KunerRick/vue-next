@@ -170,7 +170,6 @@ export function shallowReadonly<T extends object>(
     shallowReadonlyMap
   )
 }
-
 function createReactiveObject(
   target: Target,
   isReadonly: boolean,

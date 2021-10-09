@@ -20,7 +20,7 @@
             <button @click="handleClick">更新标题</button>
         </div>
         <div>
-            {{arr}}
+            {{obj.name}}{{nIndex}}
         </div>
     </div>
     <script>
@@ -29,9 +29,9 @@
             setup() {
 
                 const { ref, reactive, toRefs } = Vue
-                let arr = reactive([1,2])
-                console.log(arr[1])
-                arr[1] = '3'
+                let obj = reactive({name:'笑话'})
+                let nIndex = ref(0)
+                // arr[1] = '3'
                 // const count = ref(0)
                 // const book = reactive({
                 //     children: {
@@ -40,15 +40,21 @@
                 //     price: 'free'
                 // })
                 // let { children } = toRefs(book)
+                
                 function handleClick(e) {
                     // arr.push(arr.length+1)
-                    arr[0]= '10086'
+                    nIndex.value++
+                    obj.name = '你好'
+                    console.log(obj)
+                    
+                console.log(nIndex)
                     // children.value.msg = 'Vue 3 Detailed Guide' + count.value // 我们需要使用 .value 作为标题，现在是 ref
                     // count.value++
                 }
 
                 return {
-                    arr,
+                    obj,
+                    nIndex,
                     handleClick
                 }
             }
