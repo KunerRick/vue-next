@@ -15,9 +15,12 @@
 
 <body>
     <div id="app" style="text-align: left;">
-        title:{{book.children.child1}}
+        <!-- title:{{book.children.child1}} -->
         <div>
             <button @click="handleClick">更新标题</button>
+        </div>
+        <div>
+            {{arr}}
         </div>
     </div>
     <script>
@@ -26,30 +29,26 @@
             setup() {
 
                 const { ref, reactive, toRefs } = Vue
-                const count = ref(0)
-                console.log(Object.getOwnPropertyDescriptors(count))
-
-                const book = reactive({
-                    author: 'Vue Team',
-                    year: '2020',
-                    title: 'Vue 3 Guide',
-                    description: 'You are reading this book right now ;)',
-                    children: {
-                        child1: '你好'
-                    },
-                    price: 'free'
-                })
-
-                console.log('book', book)
-                let { children } = toRefs(book)
+                let arr = reactive([1,2])
+                console.log(arr[1])
+                arr[1] = '3'
+                // const count = ref(0)
+                // const book = reactive({
+                //     children: {
+                //         msg: '你好' 
+                //     },
+                //     price: 'free'
+                // })
+                // let { children } = toRefs(book)
                 function handleClick(e) {
-
-                    children.value.child1 = 'Vue 3 Detailed Guide' + count.value // 我们需要使用 .value 作为标题，现在是 ref
-                    count.value++
+                    // arr.push(arr.length+1)
+                    arr[0]= '10086'
+                    // children.value.msg = 'Vue 3 Detailed Guide' + count.value // 我们需要使用 .value 作为标题，现在是 ref
+                    // count.value++
                 }
 
                 return {
-                    book,
+                    arr,
                     handleClick
                 }
             }

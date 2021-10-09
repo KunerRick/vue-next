@@ -23,6 +23,7 @@ let effectTrackDepth = 0
 export let trackOpBit = 1
 
 /**
+ * SMI：用于存储小整数的特定格式 https://segmentfault.com/a/1190000011303679
  * The bitwise track markers support at most 30 levels op recursion.
  * This value is chosen to enable modern JS engines to use a SMI on all platforms.
  * When recursion depth is greater, fall back to using a full cleanup.
@@ -170,16 +171,25 @@ export function stop(runner: ReactiveEffectRunner) {
 let shouldTrack = true
 const trackStack: boolean[] = []
 
+/**
+ * 暂停追踪，将上一个状态利用栈存储，并将shouldTrack 置为 false
+ */
 export function pauseTracking() {
   trackStack.push(shouldTrack)
   shouldTrack = false
 }
 
+/**
+ * 启用追踪，将上一个状态利用栈存储，并将 shouldTrack 置为 true
+ */
 export function enableTracking() {
   trackStack.push(shouldTrack)
   shouldTrack = true
 }
 
+/**
+ * 重置追踪，优先回退到上一个追踪状态，若上一个没有，则默认为true
+ */
 export function resetTracking() {
   const last = trackStack.pop()
   shouldTrack = last === undefined ? true : last
@@ -213,7 +223,6 @@ export function trackEffects(
   dep: Dep,
   debuggerEventExtraInfo?: DebuggerEventExtraInfo
 ) {
-  // 这一块判断是否需要进行追踪
   let shouldTrack = false
   if (effectTrackDepth <= maxMarkerBits) {
     if (!newTracked(dep)) {
@@ -221,16 +230,12 @@ export function trackEffects(
       shouldTrack = !wasTracked(dep)
     }
   } else {
-    // Full cleanup mode.//TODO:?
+    // Full cleanup mode.
     shouldTrack = !dep.has(activeEffect!)
   }
 
-  // 执行追踪
   if (shouldTrack) {
-    // 为什么一定存在呢？//TODO:
     dep.add(activeEffect!)
-
-    // 将dep push到activeEffect的 deps数组中
     activeEffect!.deps.push(dep)
     if (__DEV__ && activeEffect!.onTrack) {
       activeEffect!.onTrack(
