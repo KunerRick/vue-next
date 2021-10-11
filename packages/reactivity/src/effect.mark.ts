@@ -212,6 +212,7 @@ export function track(target: object, type: TrackOpTypes, key: unknown) {
     ? { effect: activeEffect, target, type, key }
     : undefined
 
+  // 3.2新增，主要服务于effectScope作用域API
   trackEffects(dep, eventInfo)
 }
 
@@ -265,18 +266,24 @@ export function trigger(
   }
 
   let deps: (Dep | undefined)[] = []
+
+  // 如果是清空操作
   if (type === TriggerOpTypes.CLEAR) {
     // collection being cleared
     // trigger all effects for target
+    // 取出depsMap中的所有依赖
     deps = [...depsMap.values()]
   } else if (key === 'length' && isArray(target)) {
+    // 如果变化的是长度
     depsMap.forEach((dep, key) => {
+      // 依赖中大于新值则进行追加
       if (key === 'length' || key >= (newValue as number)) {
         deps.push(dep)
       }
     })
   } else {
     // schedule runs for SET | ADD | DELETE
+    // key !== undefined,进行收集
     if (key !== void 0) {
       deps.push(depsMap.get(key))
     }
@@ -326,6 +333,7 @@ export function trigger(
     const effects: ReactiveEffect[] = []
     for (const dep of deps) {
       if (dep) {
+        // dep为数组
         effects.push(...dep)
       }
     }

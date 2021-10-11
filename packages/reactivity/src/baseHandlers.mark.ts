@@ -46,12 +46,12 @@ const arrayInstrumentations = /*#__PURE__*/ createArrayInstrumentations()
 
 /**
  * 对数组的 'includes', 'indexOf', 'lastIndexOf' 以及 'push', 'pop', 'shift', 'unshift', 'splice'方法加入追踪，以便进行依赖收集
- * 为什么不直接对数组进行监测？这样操作是为了避免长度变化被追踪？TODO:
+ *
  * @returns
  */
 function createArrayInstrumentations() {
   const instrumentations: Record<string, Function> = {}
-  // 装配对操作敏感的数组方法，以用于可能的响应式操作
+  // 装配对操作敏感的数组方法，以用于可能的响应式操作(尝试注释，还未发现需要用到的场景)
   // instrument identity-sensitive Array methods to account for possible reactive
   // values
   ;(['includes', 'indexOf', 'lastIndexOf'] as const).forEach(key => {
@@ -76,7 +76,7 @@ function createArrayInstrumentations() {
     }
   })
   // instrument length-altering mutation methods to avoid length being tracked
-  // 这样操作是为了避免长度变化被追踪？
+  // 因为length的变化也会被侦听到，所以这些会改变数组长度的方法执行时，就不进行依赖追踪
   // which leads to infinite loops in some cases (#2137)
   ;(['push', 'pop', 'shift', 'unshift', 'splice'] as const).forEach(key => {
     instrumentations[key] = function(this: unknown[], ...args: unknown[]) {
@@ -190,8 +190,10 @@ function createSetter(shallow = false) {
   ): boolean {
     let oldValue = (target as any)[key]
     if (!shallow) {
+      // 转化为原始值
       value = toRaw(value)
       oldValue = toRaw(oldValue)
+      // 这一步直接赋值，交给Ref对象内部的响应式机制处理
       if (!isArray(target) && isRef(oldValue) && !isRef(value)) {
         oldValue.value = value
         return true
@@ -206,9 +208,11 @@ function createSetter(shallow = false) {
         : hasOwn(target, key)
     const result = Reflect.set(target, key, value, receiver)
     // don't trigger if target is something up in the prototype chain of original
+    // 只触发当前对象，不管原型链上的target
     if (target === toRaw(receiver)) {
       if (!hadKey) {
         trigger(target, TriggerOpTypes.ADD, key, value)
+        // 如果有这个key,并且发生了改变，才执行trigger
       } else if (hasChanged(value, oldValue)) {
         trigger(target, TriggerOpTypes.SET, key, value, oldValue)
       }
