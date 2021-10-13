@@ -20,7 +20,7 @@
             <button @click="handleClick">更新标题</button>
         </div>
         <div>
-            {{arr.indexOf(2)!==-1?'有2':'没2'}}{{nIndex}}
+            {{arr}}{{nIndex}}
         </div>
     </div>
     <script>
@@ -29,7 +29,7 @@
             setup() {
 
                 const { ref, reactive, toRefs } = Vue
-                let arr = reactive([1,2])
+                let arr = reactive(2)
                 let nIndex = ref(0)
                 // arr[1] = '3'
                 // const count = ref(0)
@@ -44,7 +44,6 @@
                 function handleClick(e) {
                     // arr.push(arr.length+1)
                     // nIndex.value++
-                    delete arr[1]
                     // children.value.msg = 'Vue 3 Detailed Guide' + count.value // 我们需要使用 .value 作为标题，现在是 ref
                     // count.value++
                 }
