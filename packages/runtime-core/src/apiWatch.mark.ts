@@ -162,21 +162,6 @@ function doWatch(
   cb: WatchCallback | null,
   { immediate, deep, flush, onTrack, onTrigger }: WatchOptions = EMPTY_OBJ
 ): WatchStopHandle {
-  if (__DEV__ && !cb) {
-    if (immediate !== undefined) {
-      warn(
-        `watch() "immediate" option is only respected when using the ` +
-          `watch(source, callback, options?) signature.`
-      )
-    }
-    if (deep !== undefined) {
-      warn(
-        `watch() "deep" option is only respected when using the ` +
-          `watch(source, callback, options?) signature.`
-      )
-    }
-  }
-
   const warnInvalidSource = (s: unknown) => {
     warn(
       `Invalid watch source: `,
@@ -283,6 +268,7 @@ function doWatch(
     return NOOP
   }
 
+  // 创建job
   let oldValue = isMultiSource ? [] : INITIAL_WATCHER_VALUE
   const job: SchedulerJob = () => {
     if (!effect.active) {
@@ -326,6 +312,8 @@ function doWatch(
   job.allowRecurse = !!cb
 
   let scheduler: EffectScheduler
+
+  // 处理flush选项
   if (flush === 'sync') {
     scheduler = job as any // the scheduler function gets called directly
   } else if (flush === 'post') {
@@ -343,6 +331,7 @@ function doWatch(
     }
   }
 
+  // 创建响应式副作用
   const effect = new ReactiveEffect(getter, scheduler)
 
   if (__DEV__) {
@@ -351,6 +340,7 @@ function doWatch(
   }
 
   // initial run
+  // 首次运行
   if (cb) {
     if (immediate) {
       job()
@@ -366,6 +356,7 @@ function doWatch(
     effect.run()
   }
 
+  // 返回用于阻止副作用的function: stop()
   return () => {
     effect.stop()
     if (instance && instance.scope) {

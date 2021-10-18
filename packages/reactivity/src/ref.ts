@@ -250,13 +250,10 @@ export interface RefUnwrapBailTypes {}
 
 export type ShallowUnwrapRef<T> = {
   [K in keyof T]: T[K] extends Ref<infer V>
-    ? V
-    : // if `V` is `unknown` that means it does not extend `Ref` and is undefined
-    T[K] extends Ref<infer V> | undefined
-    ? unknown extends V
-      ? undefined
-      : V | undefined
-    : T[K]
+    ? V // if `V` is `unknown` that means it does not extend `Ref` and is undefined
+    : T[K] extends Ref<infer V> | undefined
+      ? unknown extends V ? undefined : V | undefined
+      : T[K]
 }
 
 export type UnwrapRef<T> = T extends Ref<infer V>
@@ -271,9 +268,7 @@ export type UnwrapRefSimple<T> = T extends
   | RefUnwrapBailTypes[keyof RefUnwrapBailTypes]
   ? T
   : T extends Array<any>
-  ? { [K in keyof T]: UnwrapRefSimple<T[K]> }
-  : T extends object
-  ? {
-      [P in keyof T]: P extends symbol ? T[P] : UnwrapRef<T[P]>
-    }
-  : T
+    ? { [K in keyof T]: UnwrapRefSimple<T[K]> }
+    : T extends object
+      ? { [P in keyof T]: P extends symbol ? T[P] : UnwrapRef<T[P]> }
+      : T
