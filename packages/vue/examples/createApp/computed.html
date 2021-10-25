@@ -15,31 +15,31 @@
 
 <body>
     <div id="app" style="text-align: left;">
-        <!-- title:{{book.children.child1}} -->
+        {{count}}:{{a}}
         <div>
-            <button @click="handleClick">更新标题</button>
-        </div>
-        <div>
-            {{nIndex.name}}
+            <button @click="handleClick">更新数目</button>
         </div>
     </div>
     <script>
-        'use strict'
         const app = Vue.createApp({
             setup() {
+                const { toRef, ref, computed } = Vue
 
-                const { ref, reactive, toRefs } = Vue
-         
-                let nIndex = reactive({name:'姓名'})
-   
-                
+                let count = ref(0)
+
+                let a = computed(() => {
+                    return count.value * 2
+                });
+
+                a.value = 2
+
                 function handleClick(e) {
-                    nIndex.name = "修改后的姓名"
-            
+                    count.value++
                 }
 
                 return {
-                    nIndex,
+                    a,
+                    count,
                     handleClick
                 }
             }
