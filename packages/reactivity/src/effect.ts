@@ -203,7 +203,6 @@ export function track(target: object, type: TrackOpTypes, key: unknown) {
     : undefined
 
   trackEffects(dep, eventInfo)
-  console.log(key, dep, target)
 }
 
 export function isTracking() {
@@ -228,7 +227,7 @@ export function trackEffects(
 
   // 执行追踪
   if (shouldTrack) {
-    // 为什么一定存在呢？//TODO:
+    // 收集依赖
     dep.add(activeEffect!)
 
     // 将dep push到activeEffect的 deps数组中
@@ -255,6 +254,7 @@ export function trigger(
   oldTarget?: Map<unknown, unknown> | Set<unknown>
 ) {
   const depsMap = targetMap.get(target)
+  debugger
   if (!depsMap) {
     // never been tracked
     return
@@ -337,6 +337,7 @@ export function triggerEffects(
   dep: Dep | ReactiveEffect[],
   debuggerEventExtraInfo?: DebuggerEventExtraInfo
 ) {
+  debugger
   // spread into array for stabilization
   for (const effect of isArray(dep) ? dep : [...dep]) {
     if (effect !== activeEffect || effect.allowRecurse) {

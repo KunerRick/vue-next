@@ -56,7 +56,7 @@ function createArrayInstrumentations() {
   // values
   ;(['includes', 'indexOf', 'lastIndexOf'] as const).forEach(key => {
     // 这里的this是个伪参数，仅用于静态检查，属于ts的用法，参考 this参数：https://www.tslang.cn/docs/handbook/functions.html
-    instrumentations[key] = function(this: unknown[], ...args: unknown[]) {
+    instrumentations[key] = function (this: unknown[], ...args: unknown[]) {
       // 转换为原始类型
       const arr = toRaw(this) as any
       // 对数组的每个元素进行追踪，为什么要在这三个方法里进行追踪？因为确实会依赖。依赖追踪是在get方法中进行的
@@ -79,7 +79,7 @@ function createArrayInstrumentations() {
   // 因为length的变化也会被侦听到，所以这些会改变数组长度的方法执行时，就不进行依赖追踪
   // which leads to infinite loops in some cases (#2137)
   ;(['push', 'pop', 'shift', 'unshift', 'splice'] as const).forEach(key => {
-    instrumentations[key] = function(this: unknown[], ...args: unknown[]) {
+    instrumentations[key] = function (this: unknown[], ...args: unknown[]) {
       pauseTracking()
       // 是因为此处的操作如果追踪的话，可能会死循环？ TODO:
       const res = (toRaw(this) as any)[key].apply(this, args)
@@ -123,8 +123,8 @@ function createGetter(isReadonly = false, shallow = false) {
             ? shallowReadonlyMap
             : readonlyMap
           : shallow
-            ? shallowReactiveMap
-            : reactiveMap
+          ? shallowReactiveMap
+          : reactiveMap
         ).get(target)
     ) {
       /**
@@ -151,7 +151,7 @@ function createGetter(isReadonly = false, shallow = false) {
       return res
     }
 
-    // 如果时响应式的，执行track
+    // 如果是响应式的，执行track
     if (!isReadonly) {
       track(target, TrackOpTypes.GET, key)
     }

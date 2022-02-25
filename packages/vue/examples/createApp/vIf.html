@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>v-if</title>
+</head>
+
+<body>
+
+  <div id="app">
+    <button @click="handleClick">切换可见性</button>
+    <div v-if="visible">
+      可见内容
+    </div>
+  </div>
+  <script src="../../dist/vue.global.js"></script>
+  <script>
+    Vue.createApp({
+      setup(props) {
+        const {
+          ref
+        } = Vue
+        let visible = ref(true)
+
+        function handleClick() {
+          visible.value = !visible.value
+        }
+        return {
+          visible,
+          handleClick
+        }
+      },
+    }).mount('#app')
+  </script>
+</body>
+
+</html>
