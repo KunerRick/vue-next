@@ -25,6 +25,11 @@ export const createDep = (effects?: ReactiveEffect[]): Dep => {
   return dep
 }
 
+/**
+ * 就是在比较dep.w 和 trackObBit 是否相同
+ * @param dep
+ * @returns
+ */
 export const wasTracked = (dep: Dep): boolean => (dep.w & trackOpBit) > 0
 
 export const newTracked = (dep: Dep): boolean => (dep.n & trackOpBit) > 0

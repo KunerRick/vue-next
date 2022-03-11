@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        body {
+            text-align: center;
+        }
+    </style>
+    <script src="../../dist/vue.global.js"></script>
+</head>
+
+<body>
+    <div id="app" style="text-align: left;">
+        <!-- title:{{book.children.child1}} -->
+        <div>
+            <button @click="handleClick">更新标题</button>
+        </div>
+        <div>
+            {{nIndex.name}}
+        </div>
+    </div>
+    <script>
+        'use strict'
+        const app = Vue.createApp({
+            setup() {
+
+                const { ref, reactive, toRefs } = Vue
+         
+                let nIndex = reactive({name:'姓名'})
+   
+                
+                function handleClick(e) {
+                    nIndex.name = "修改后的姓名"
+            
+                }
+
+                return {
+                    nIndex,
+                    handleClick
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+
+</html>

@@ -9,7 +9,6 @@ import {
   newTracked,
   wasTracked
 } from './dep'
-import { ComputedRefImpl } from './computed'
 
 // The main WeakMap that stores {target -> key -> dep} connections.
 // Conceptually, it's easier to think of a dependency as a Dep class
@@ -24,7 +23,8 @@ let effectTrackDepth = 0
 export let trackOpBit = 1
 
 /**
- * The bitwise track markers support at most 30 levels of recursion.
+ * SMI：用于存储小整数的特定格式 https://segmentfault.com/a/1190000011303679
+ * The bitwise track markers support at most 30 levels op recursion.
  * This value is chosen to enable modern JS engines to use a SMI on all platforms.
  * When recursion depth is greater, fall back to using a full cleanup.
  */
@@ -45,7 +45,8 @@ export type DebuggerEventExtraInfo = {
   oldTarget?: Map<any, any> | Set<any>
 }
 
-export let activeEffect: ReactiveEffect | undefined
+const effectStack: ReactiveEffect[] = []
+let activeEffect: ReactiveEffect | undefined
 
 export const ITERATE_KEY = Symbol(__DEV__ ? 'iterate' : '')
 export const MAP_KEY_ITERATE_KEY = Symbol(__DEV__ ? 'Map key iterate' : '')
@@ -53,18 +54,10 @@ export const MAP_KEY_ITERATE_KEY = Symbol(__DEV__ ? 'Map key iterate' : '')
 export class ReactiveEffect<T = any> {
   active = true
   deps: Dep[] = []
-  parent: ReactiveEffect | undefined = undefined
 
-  /**
-   * Can be attached after creation
-   * @internal
-   */
-  computed?: ComputedRefImpl<T>
-  /**
-   * @internal
-   */
+  // can be attached after creation
+  computed?: boolean
   allowRecurse?: boolean
-
   onStop?: () => void
   // dev only
   onTrack?: (event: DebuggerEvent) => void
@@ -74,7 +67,7 @@ export class ReactiveEffect<T = any> {
   constructor(
     public fn: () => T,
     public scheduler: EffectScheduler | null = null,
-    scope?: EffectScope
+    scope?: EffectScope | null
   ) {
     recordEffectScope(this, scope)
   }
@@ -83,37 +76,31 @@ export class ReactiveEffect<T = any> {
     if (!this.active) {
       return this.fn()
     }
-    let parent: ReactiveEffect | undefined = activeEffect
-    let lastShouldTrack = shouldTrack
-    while (parent) {
-      if (parent === this) {
-        return
+    if (!effectStack.includes(this)) {
+      try {
+        effectStack.push((activeEffect = this))
+        enableTracking()
+
+        trackOpBit = 1 << ++effectTrackDepth
+
+        if (effectTrackDepth <= maxMarkerBits) {
+          initDepMarkers(this)
+        } else {
+          cleanupEffect(this)
+        }
+        return this.fn()
+      } finally {
+        if (effectTrackDepth <= maxMarkerBits) {
+          finalizeDepMarkers(this)
+        }
+
+        trackOpBit = 1 << --effectTrackDepth
+
+        resetTracking()
+        effectStack.pop()
+        const n = effectStack.length
+        activeEffect = n > 0 ? effectStack[n - 1] : undefined
       }
-      parent = parent.parent
-    }
-    try {
-      this.parent = activeEffect
-      activeEffect = this
-      shouldTrack = true
-
-      trackOpBit = 1 << ++effectTrackDepth
-
-      if (effectTrackDepth <= maxMarkerBits) {
-        initDepMarkers(this)
-      } else {
-        cleanupEffect(this)
-      }
-      return this.fn()
-    } finally {
-      if (effectTrackDepth <= maxMarkerBits) {
-        finalizeDepMarkers(this)
-      }
-
-      trackOpBit = 1 << --effectTrackDepth
-
-      activeEffect = this.parent
-      shouldTrack = lastShouldTrack
-      this.parent = undefined
     }
   }
 
@@ -181,48 +168,62 @@ export function stop(runner: ReactiveEffectRunner) {
   runner.effect.stop()
 }
 
-export let shouldTrack = true
+let shouldTrack = true
 const trackStack: boolean[] = []
 
+/**
+ * 暂停追踪，将上一个状态利用栈存储，并将shouldTrack 置为 false
+ */
 export function pauseTracking() {
   trackStack.push(shouldTrack)
   shouldTrack = false
 }
 
+/**
+ * 启用追踪，将上一个状态利用栈存储，并将 shouldTrack 置为 true
+ */
 export function enableTracking() {
   trackStack.push(shouldTrack)
   shouldTrack = true
 }
 
+/**
+ * 重置追踪，优先回退到上一个追踪状态，若上一个没有，则默认为true
+ */
 export function resetTracking() {
   const last = trackStack.pop()
   shouldTrack = last === undefined ? true : last
 }
 
 export function track(target: object, type: TrackOpTypes, key: unknown) {
-  if (shouldTrack && activeEffect) {
-    let depsMap = targetMap.get(target)
-    if (!depsMap) {
-      targetMap.set(target, (depsMap = new Map()))
-    }
-    let dep = depsMap.get(key)
-    if (!dep) {
-      depsMap.set(key, (dep = createDep()))
-    }
-
-    const eventInfo = __DEV__
-      ? { effect: activeEffect, target, type, key }
-      : undefined
-
-    trackEffects(dep, eventInfo)
+  if (!isTracking()) {
+    return
   }
+  let depsMap = targetMap.get(target)
+  if (!depsMap) {
+    targetMap.set(target, (depsMap = new Map()))
+  }
+  let dep = depsMap.get(key)
+  if (!dep) {
+    depsMap.set(key, (dep = createDep()))
+  }
+
+  const eventInfo = __DEV__
+    ? { effect: activeEffect, target, type, key }
+    : undefined
+
+  // 3.2新增，主要服务于effectScope作用域API
+  trackEffects(dep, eventInfo)
+}
+
+export function isTracking() {
+  return shouldTrack && activeEffect !== undefined
 }
 
 export function trackEffects(
   dep: Dep,
   debuggerEventExtraInfo?: DebuggerEventExtraInfo
 ) {
-  // 这一块判断是否需要进行追踪
   let shouldTrack = false
   if (effectTrackDepth <= maxMarkerBits) {
     if (!newTracked(dep)) {
@@ -230,16 +231,12 @@ export function trackEffects(
       shouldTrack = !wasTracked(dep)
     }
   } else {
-    // Full cleanup mode.//TODO:?
+    // Full cleanup mode.
     shouldTrack = !dep.has(activeEffect!)
   }
 
-  // 执行追踪
   if (shouldTrack) {
-    // 收集依赖
     dep.add(activeEffect!)
-
-    // 将dep push到activeEffect的 deps数组中
     activeEffect!.deps.push(dep)
     if (__DEV__ && activeEffect!.onTrack) {
       activeEffect!.onTrack(
@@ -263,25 +260,30 @@ export function trigger(
   oldTarget?: Map<unknown, unknown> | Set<unknown>
 ) {
   const depsMap = targetMap.get(target)
-  debugger
   if (!depsMap) {
     // never been tracked
     return
   }
 
   let deps: (Dep | undefined)[] = []
+
+  // 如果是清空操作
   if (type === TriggerOpTypes.CLEAR) {
     // collection being cleared
     // trigger all effects for target
+    // 取出depsMap中的所有依赖
     deps = [...depsMap.values()]
   } else if (key === 'length' && isArray(target)) {
+    // 如果变化的是长度
     depsMap.forEach((dep, key) => {
+      // 依赖中大于新值则进行追加
       if (key === 'length' || key >= (newValue as number)) {
         deps.push(dep)
       }
     })
   } else {
     // schedule runs for SET | ADD | DELETE
+    // key !== undefined,进行收集
     if (key !== void 0) {
       deps.push(depsMap.get(key))
     }
@@ -331,6 +333,7 @@ export function trigger(
     const effects: ReactiveEffect[] = []
     for (const dep of deps) {
       if (dep) {
+        // dep为数组
         effects.push(...dep)
       }
     }
@@ -346,7 +349,6 @@ export function triggerEffects(
   dep: Dep | ReactiveEffect[],
   debuggerEventExtraInfo?: DebuggerEventExtraInfo
 ) {
-  debugger
   // spread into array for stabilization
   for (const effect of isArray(dep) ? dep : [...dep]) {
     if (effect !== activeEffect || effect.allowRecurse) {

@@ -92,6 +92,7 @@ export function reactive(target: object) {
   if (isReadonly(target)) {
     return target
   }
+
   return createReactiveObject(
     target,
     false,
@@ -177,7 +178,6 @@ export function shallowReadonly<T extends object>(target: T): Readonly<T> {
     shallowReadonlyMap
   )
 }
-
 function createReactiveObject(
   target: Target,
   isReadonly: boolean,
@@ -204,6 +204,7 @@ function createReactiveObject(
   if (existingProxy) {
     return existingProxy
   }
+
   // only a whitelist of value types can be observed.
   const targetType = getTargetType(target)
   if (targetType === TargetType.INVALID) {
