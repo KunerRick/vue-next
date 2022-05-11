@@ -2,49 +2,52 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    <style>
-        body {
-            text-align: center;
-        }
-    </style>
-    <script src="../../dist/vue.global.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <style>
+    body {
+      text-align: center;
+    }
+  </style>
+  <script src="../../dist/vue.global.js"></script>
 </head>
 
 <body>
-    <div id="app" style="text-align: left;">
-        {{count}}:{{a}}
-        <div>
-            <button @click="handleClick">更新数目</button>
-        </div>
+  <div id="app" style="text-align: left;">
+    {{count}}:{{a}}
+    <div>
+      <button @click="handleClick">更新数目</button>
     </div>
-    <script>
-        const app = Vue.createApp({
-            setup() {
-                const { toRef, ref, computed } = Vue
+  </div>
+  <script>
+    const app = Vue.createApp({
+      setup() {
+        const {
+          toRef,
+          ref,
+          computed
+        } = Vue
 
-                let count = ref(0)
+        let count = ref(0)
 
-                let a = computed(() => {
-                    return count.value * 2
-                });
+        let a = computed(() => {
+          return count.value * 2
+        });
 
-                a.value = 2
 
-                function handleClick(e) {
-                    count.value++
-                }
+        function handleClick(e) {
+          count.value++
+        }
 
-                return {
-                    a,
-                    count,
-                    handleClick
-                }
-            }
-        }).mount('#app')
-    </script>
+        return {
+          a,
+          count,
+          handleClick
+        }
+      }
+    }).mount('#app')
+  </script>
 </body>
 
 </html>

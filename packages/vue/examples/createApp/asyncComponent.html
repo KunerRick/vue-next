@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <style>
+    body {
+      text-align: center;
+    }
+  </style>
+  <script src="../../dist/vue.global.js"></script>
+</head>
+
+<body>
+  <div id="app" style="text-align: left;">
+    <!-- title:{{book.children.child1}} -->
+    <div>
+      <div>
+        {{name}}
+      </div>
+      <div>
+        <async-comp />
+      </div>
+      <div>
+        {{name}}
+      </div>
+    </div>
+  </div>
+  <script>
+    'use strict'
+    const {
+      ref,
+      defineAsyncComponent,
+      defineComponent
+    } = Vue
+    const title = ref('你好')
+
+    setTimeout(() => {
+      title.value = '我变了'
+    }, 1000)
+
+    const app = Vue.createApp({
+      components: {
+        'async-comp': defineAsyncComponent(() => {
+          return new Promise((resolve) => {
+            setTimeout(() => {
+              resolve(defineComponent({
+                name: 'AsyncComp',
+                template: `<div>异步组件</div>`
+              }))
+            }, 2000)
+          })
+        })
+      },
+      setup() {
+        return {
+          name: title
+        }
+      }
+    }).mount('#app')
+  </script>
+</body>
+
+</html>

@@ -284,7 +284,7 @@ export function trigger(
     if (key !== void 0) {
       deps.push(depsMap.get(key))
     }
-
+    debugger
     // also run for iteration key on ADD | DELETE | Map.SET
     switch (type) {
       case TriggerOpTypes.ADD:

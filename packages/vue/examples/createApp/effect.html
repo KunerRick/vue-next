@@ -36,9 +36,9 @@
         } = Vue
 
         let numRef = ref(2)
-        let objectRef = ref({name:'a'})
-
-        console.log(numRef,objectRef)
+        let objectRef = ref({
+          name: 'a'
+        })
 
         let nIndex = reactive({
           name: '姓名'
@@ -47,18 +47,19 @@
         let index = 1
 
         function handleClick(e) {
-          nIndex.name = "修改后的姓名" + ++index
+          nIndex.dd = "修改后的姓名" + ++index
         }
 
-        watch(() => nIndex.name, (val) => {
+        watch(() => nIndex, (val) => {
           console.log('change', val)
         }, {
-          onTrack(e) {
-            console.log('track', e)
-          },
-          onTrigger(e) {
-            console.log('trigger', e)
-          }
+          // onTrack(e) {
+          //   console.log('track', e)
+          // },
+          // onTrigger(e) {
+          //   console.log('trigger', e)
+          // }
+          deep: true
         })
         return {
           nIndex,
